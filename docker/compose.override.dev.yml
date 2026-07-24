@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+# compose.override.dev.yml
+#
+# 开发态覆盖文件（不修改主文件 docker-compose.yml）。
+#
+# 用途：
+#   1. 为 backend 服务增加健康检查；
+#   2. 把 JVM 运行时参数从独立的 env_file (docker/backend.env) 注入，
+#      禁止把 JVM 参数直接硬编码进 compose YAML。
+#
+# 使用方式（在仓库根目录执行）：
+#   docker compose -f docker-compose.yml \
+#                  -f docker/compose.override.dev.yml \
+#                  up -d --build
+# ---------------------------------------------------------------------------
+
+services:
+  backend:
+    env_file:
+      - ./backend.env
+    healthcheck:
+      # /login 是 SecurityConfig 中明确 permitAll 的端点，稳定返回 200，
+      # 且无需引入 spring-boot-starter-actuator。
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/login >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  frontend:
+    depends_on:
+      backend:
+        condition: service_healthy
