@@ -1,0 +1,35 @@
+# docker/compose.override.dev.yml
+#
+# Development-only override for docker-compose.yml.
+# Purpose:
+#   1. Add a health check for the backend service.
+#   2. Load JVM runtime parameters from docker/backend.env (keeps JVM flags OUT of YAML).
+#   3. Make frontend wait for backend health (not just startup).
+#
+# Usage (automatic with Docker Compose v2 if file is named docker-compose.override.yml,
+# but we use an explicit name so it never leaks into production):
+#   docker compose -f docker-compose.yml -f docker/compose.override.dev.yml up -d
+
+services:
+  backend:
+    # env_file injects JAVA_TOOL_OPTIONS and JVM tuning vars into the container.
+    # No JVM flags are hardcoded in this YAML; all runtime parameters live in backend.env.
+    env_file:
+      - ./docker/backend.env
+    healthcheck:
+      # The Spring Boot app listens on port 8000; "/" returns 302 redirect which wget treats as success.
+      # Uses bash /dev/tcp as a fallback when wget is unavailable.
+      test:
+        - CMD-SHELL
+        - >
+          (wget --no-verbose --tries=1 --spider http://localhost:8000/ 2>/dev/null) ||
+          (bash -c 'exec 3<>/dev/tcp/localhost/8000 && echo -e "GET / HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && head -1 <&3 | grep -q "HTTP/"')
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  frontend:
+    depends_on:
+      backend:
+        condition: service_healthy
