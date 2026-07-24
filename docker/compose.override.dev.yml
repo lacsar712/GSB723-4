@@ -1,0 +1,17 @@
+# 开发侧增强 override（不改动根目录 docker-compose.yml 主文件）。
+# 用法：docker compose -f docker-compose.yml -f docker/compose.override.dev.yml up -d --build
+#
+# 本文件只负责“编排增强”：为 backend 增加健康检查，并引用独立的运行时参数文件；
+# JVM 相关运行时参数不硬编码在此，统一放在 docker/backend.env 中。
+services:
+  backend:
+    # 运行时参数（含 JVM 堆内存等）来自独立环境变量文件，实现编排与参数分离。
+    env_file:
+      - docker/backend.env
+    # 健康检查：backend 未引入 actuator，故用 TCP 探活（基础镜像含 bash）。
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8000"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 40s
